@@ -10,12 +10,29 @@ import (
 	"strings"
 )
 
+type config struct {
+	suppressCommon bool
+}
+
+type option func(*config)
+
+// OptSuppressCommon suppresses common lines.
+func OptSuppressCommon() option {
+	return func(c *config) {
+		c.suppressCommon = true
+	}
+}
+
 // Format returns a formatted diff of the two texts,
 // showing the entire text and the minimum line-level
 // additions and removals to turn text1 into text2.
 // (That is, lines only in text1 appear with a leading -,
 // and lines only in text2 appear with a leading +.)
-func Format(text1, text2 string) string {
+func Format(text1, text2 string, options ...option) string {
+	var c config
+	for _, option := range options {
+		option(&c)
+	}
 	if text1 != "" && !strings.HasSuffix(text1, "\n") {
 		text1 += "(missing final newline)"
 	}
@@ -64,14 +81,25 @@ func Format(text1, text2 string) string {
 	for i > 0 || j > 0 {
 		cost := dist[i][j]
 		if i > 0 && j > 0 && cost == dist[i-1][j-1] && lines1[len(lines1)-i] == lines2[len(lines2)-j] {
-			fmt.Fprintf(&buf, " %s\n", lines1[len(lines1)-i])
+			if !c.suppressCommon {
+				k := len(lines1) - i
+				fmt.Fprintf(&buf, " %s\n", lines1[k])
+			}
 			i--
 			j--
 		} else if i > 0 && cost == dist[i-1][j]+1 {
-			fmt.Fprintf(&buf, "-%s\n", lines1[len(lines1)-i])
+			k := len(lines1) - i
+			if c.suppressCommon {
+				fmt.Fprint(&buf, k+1)
+			}
+			fmt.Fprintf(&buf, "-%s\n", lines1[k])
 			i--
 		} else {
-			fmt.Fprintf(&buf, "+%s\n", lines2[len(lines2)-j])
+			k := len(lines2) - j
+			if c.suppressCommon {
+				fmt.Fprint(&buf, k+1)
+			}
+			fmt.Fprintf(&buf, "+%s\n", lines2[k])
 			j--
 		}
 	}
